@@ -1,0 +1,151 @@
+# notebooks/interactive_dashboard.py
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import pandas as pd
+
+class InteractiveDashboard:
+    def __init__(self, df):
+        self.df = df
+        self.color_palette = {
+            'primary': '#2A5CAA',
+            'secondary': '#FF7F0E',
+            'alert': '#D62728',
+            'forecast': '#7F7F7F'
+        }
+    
+    def create_timeseries_chart(self):
+        """Cria gráfico de série temporal com receita e crescimento"""
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        
+        # Linha de receita
+        fig.add_trace(
+            go.Scatter(
+                x=self.df['mes'],
+                y=self.df['receita'],
+                name="Receita",
+                line=dict(color=self.color_palette['primary'], width=3),
+                mode='lines+markers',
+                hovertemplate="<b>%{x|%b %Y}</b><br>Receita: R$ %{y:,.2f}<extra></extra>"
+            ),
+            secondary_y=False
+        )
+        
+        # Barras de crescimento
+        fig.add_trace(
+            go.Bar(
+                x=self.df['mes'],
+                y=self.df['receita_growth'],
+                name="Crescimento (%)",
+                marker_color=self.color_palette['secondary'],
+                opacity=0.6,
+                hovertemplate="<b>%{x|%b %Y}</b><br>Crescimento: %{y:.1f}%<extra></extra>"
+            ),
+            secondary_y=True
+        )
+        
+        # Destaque para previsões
+        if 'is_forecast' in self.df.columns:
+            forecast_df = self.df[self.df['is_forecast']]
+            fig.add_trace(
+                go.Scatter(
+                    x=forecast_df['mes'],
+                    y=forecast_df['receita'],
+                    name="Previsão",
+                    line=dict(color=self.color_palette['forecast'], width=3, dash='dot'),
+                    mode='lines+markers',
+                    hovertemplate="<b>%{x|%b %Y}</b><br>Previsão: R$ %{y:,.2f}<extra></extra>"
+                ),
+                secondary_y=False
+            )
+        
+        # Formatação
+        fig.update_layout(
+            title="Desempenho Mensal - Receita e Crescimento",
+            xaxis_title="Mês",
+            yaxis_title="Receita (R$)",
+            yaxis2_title="Crescimento (%)",
+            hovermode="x unified",
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            )
+        )
+        
+        return fig
+    
+    def create_kpi_matrix(self):
+        """Cria matriz de KPIs com indicadores-chave"""
+        latest_data = self.df[self.df['is_forecast'] != True].iloc[-1]
+        
+        fig = go.Figure()
+        
+        # Adiciona métricas como anotações
+        metrics = [
+            ("Receita", latest_data['receita'], "R$ {:,.2f}"),
+            ("Crescimento", latest_data['receita_growth'], "{:.1f}%"),
+            ("Ticket Médio", latest_data['ticket_medio'], "R$ {:,.2f}"),
+            ("Margem", latest_data['margem_lucro'], "{:.1f}%")
+        ]
+        
+        for i, (name, value, fmt) in enumerate(metrics):
+            color = self.color_palette['primary']
+            if name == "Crescimento":
+                color = self.color_palette['alert'] if value < 0 else self.color_palette['secondary']
+            
+            fig.add_annotation(
+                x=i,
+                y=0,
+                text=f"<b>{name}</b><br>{fmt.format(value)}",
+                showarrow=False,
+                font=dict(size=14, color=color),
+                xref="x",
+                yref="y"
+            )
+        
+        fig.update_layout(
+            title="Indicadores-Chave do Último Mês",
+            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            plot_bgcolor="white",
+            height=200
+        )
+        
+        return fig
+    
+    def create_segmentation_chart(self):
+        """Cria gráfico de sunburst para segmentação de clientes"""
+        # Agrupa dados por segmento e status (exemplo)
+        segment_data = self.df.groupby('segmento').agg({
+            'clientes_ativos': 'sum',
+            'receita': 'sum'
+        }).reset_index()
+        
+        fig = px.sunburst(
+            segment_data,
+            path=['segmento'],
+            values='receita',
+            color='clientes_ativos',
+            color_continuous_scale='Blues',
+            title="Receita por Segmento de Cliente"
+        )
+        
+        fig.update_traces(
+            textinfo="label+percent parent",
+            hovertemplate="<b>%{label}</b><br>Receita: R$ %{value:,.2f}<br>Clientes: %{color:,}<extra></extra>"
+        )
+        
+        return fig
+
+# Exemplo de uso
+if __name__ == "__main__":
+    df = pd.read_csv('data/processed/kpi_processed.csv', parse_dates=['mes'])
+    dashboard = InteractiveDashboard(df)
+    
+    # Gera e salva visualizações
+    dashboard.create_timeseries_chart().write_html("data/outputs/timeseries.html")
+    dashboard.create_kpi_matrix().write_html("data/outputs/kpi_matrix.html")
+    dashboard.create_segmentation_chart().write_html("data/outputs/segmentation.html")
