@@ -1,0 +1,33 @@
+# docs/kpi_definitions.md
+## Definição de Indicadores-Chave
+
+### 1. Receita Total
+- **Descrição**: Soma do valor bruto de todos os pedidos no período
+- **Fórmula**: `SUM(pedidos.valor_total)`
+- **Fonte**: Tabela `pedidos` no Data Warehouse
+- **Responsável**: Área de Vendas
+- **Frequência**: Atualização diária
+
+### 2. Taxa de Crescimento Mensal
+- **Descrição**: Variação percentual da receita em relação ao mês anterior
+- **Fórmula**: `(Receita Mês Atual - Receita Mês Anterior) / Receita Mês Anterior`
+- **Meta**: ≥ 3% ao mês
+- **Segmentação**: Por região, produto e canal
+
+### 3. Ticket Médio
+- **Descrição**: Valor médio gasto por pedido
+- **Fórmula**: `Receita Total / Número de Pedidos`
+- **Benchmark**: R$ 120,00 (setor)
+- **Ações**: Campanhas de upsell quando abaixo da média
+
+## Padronização Visual
+
+### Cores
+- Primária: Azul (#2A5CAA) para métricas principais
+- Secundária: Laranja (#FF7F0E) para comparações
+- Alerta: Vermelho (#D62728) para valores críticos
+
+### Formatação
+- Monetário: R$ 1.234,56
+- Percentual: 12,34%
+- Datas: dd/mm/aaaa
