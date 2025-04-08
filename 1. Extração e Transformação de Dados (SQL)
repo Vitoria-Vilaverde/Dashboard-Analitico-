@@ -1,0 +1,40 @@
+-- data/sql_queries/kpi_operacionais.sql
+WITH 
+metricas_vendas AS (
+  SELECT
+    DATE_TRUNC('month', data_pedido) AS mes,
+    COUNT(DISTINCT id_pedido) AS pedidos,
+    COUNT(DISTINCT id_cliente) AS clientes_ativos,
+    SUM(valor_total) AS receita,
+    SUM(valor_lucro) AS lucro,
+    SUM(valor_total) / COUNT(DISTINCT id_pedido) AS ticket_medio
+  FROM pedidos
+  WHERE data_pedido BETWEEN DATEADD(month, -12, CURRENT_DATE) AND CURRENT_DATE
+  GROUP BY 1
+),
+
+metricas_marketing AS (
+  SELECT
+    DATE_TRUNC('month', data_campanha) AS mes,
+    SUM(custo) AS investimento_marketing,
+    COUNT(DISTINCT id_lead) AS leads_gerados,
+    SUM(CASE WHEN convertido THEN 1 ELSE 0 END) AS leads_convertidos
+  FROM campanhas_marketing
+  GROUP BY 1
+)
+
+SELECT
+  v.mes,
+  v.pedidos,
+  v.clientes_ativos,
+  v.receita,
+  v.lucro,
+  v.ticket_medio,
+  m.investimento_marketing,
+  m.leads_gerados,
+  m.leads_convertidos,
+  (m.leads_convertidos / NULLIF(m.leads_gerados, 0)) * 100 AS taxa_conversao,
+  (v.receita / NULLIF(m.investimento_marketing, 0)) AS roi_marketing
+FROM metricas_vendas v
+LEFT JOIN metricas_marketing m ON v.mes = m.mes
+ORDER BY 1 DESC
