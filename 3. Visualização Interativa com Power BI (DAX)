@@ -1,0 +1,42 @@
+// powerbi/model/medidas.dax
+// KPIs Básicos
+Receita Total = 
+SUM(pedidos[valor_total])
+
+Lucro Total = 
+SUM(pedidos[valor_lucro])
+
+Ticket Médio = 
+DIVIDE([Receita Total], DISTINCTCOUNT(pedidos[id_pedido]))
+
+// KPIs de Crescimento
+Crescimento Mensal Receita = 
+VAR CurrentMonth = SELECTEDVALUE(dim_tempo[mes_ano])
+VAR PreviousMonth = DATEADD(dim_tempo[data], -1, MONTH)
+RETURN
+DIVIDE(
+    [Receita Total] - CALCULATE([Receita Total], PreviousMonth),
+    CALCULATE([Receita Total], PreviousMonth)
+)
+
+// Segmentação por Perfil
+Receita por Segmento = 
+SWITCH(
+    SELECTEDVALUE(segmentos[segmento]),
+    "Premium", CALCULATE([Receita Total], segmentos[segmento] = "Premium"),
+    "Regular", CALCULATE([Receita Total], segmentos[segmento] = "Regular"),
+    "Novos", CALCULATE([Receita Total], segmentos[cliente_novo] = TRUE),
+    [Receita Total]
+)
+
+// Medida para alertas
+Alerta Desempenho = 
+IF(
+    [Crescimento Mensal Receita] < -0.02,
+    "Atenção: Crescimento Negativo",
+    IF(
+        [Crescimento Mensal Receita] > 0.05,
+        "Ótimo Desempenho",
+        "Desempenho Normal"
+    )
+)
