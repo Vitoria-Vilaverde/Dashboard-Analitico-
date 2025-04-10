@@ -1,0 +1,249 @@
+# %% [markdown]
+# # Dashboard Analítico - Teste no Google Colab
+# 
+# Este notebook demonstra um fluxo completo de análise de dados com:
+# - Geração de dados sintéticos de vendas
+# - Cálculo de KPIs
+# - Visualizações interativas
+# - Storytelling com dados
+
+# %%
+# Instalação de pacotes (executar apenas uma vez)
+!pip install plotly pandas numpy
+
+# %%
+import numpy as np
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from datetime import datetime, timedelta
+
+# %% [markdown]
+# ## 1. Geração de Dados Sintéticos
+
+# %%
+# Configuração
+np.random.seed(42)
+start_date = datetime(2023, 1, 1)
+n_days = 180
+segmentos = ['E-commerce', 'Loja Física', 'Atacado']
+regioes = ['Sudeste', 'Sul', 'Nordeste', 'Norte', 'Centro-Oeste']
+
+# Gera datas
+dates = [start_date + timedelta(days=i) for i in range(n_days)]
+
+# Cria DataFrame
+df = pd.DataFrame({
+    'data': np.random.choice(dates, size=1000),
+    'segmento': np.random.choice(segmentos, size=1000, p=[0.5, 0.3, 0.2]),
+    'regiao': np.random.choice(regioes, size=1000),
+    'valor_venda': np.random.lognormal(mean=5, sigma=0.5, size=1000).round(2),
+    'custo': np.random.lognormal(mean=4, sigma=0.4, size=1000).round(2),
+})
+
+# Adiciona colunas calculadas
+df['lucro'] = df['valor_venda'] - df['custo']
+df['margem'] = (df['lucro'] / df['valor_venda'] * 100).round(1)
+df['mes'] = df['data'].dt.to_period('M').astype(str)
+
+# Visualiza amostra
+df.sample(5)
+
+# %% [markdown]
+# ## 2. Análise e Agregação de Dados
+
+# %%
+# Agregação mensal
+df_monthly = df.groupby('mes').agg({
+    'data': 'count',
+    'valor_venda': 'sum',
+    'custo': 'sum',
+    'lucro': 'sum'
+}).rename(columns={'data': 'vendas'}).reset_index()
+
+# Calcula métricas de crescimento
+df_monthly['crescimento'] = (df_monthly['valor_venda'].pct_change() * 100).round(1)
+df_monthly['ticket_medio'] = (df_monthly['valor_venda'] / df_monthly['vendas']).round(2)
+
+# Adiciona previsão (simplificada)
+last_month = df_monthly.iloc[-1]
+forecast = {
+    'mes': '2023-07',
+    'vendas': int(last_month['vendas'] * 1.05),
+    'valor_venda': last_month['valor_venda'] * 1.05,
+    'custo': last_month['custo'] * 1.03,
+    'lucro': last_month['lucro'] * 1.07,
+    'crescimento': 5.0,
+    'ticket_medio': last_month['ticket_medio'] * 1.02
+}
+df_monthly = pd.concat([df_monthly, pd.DataFrame([forecast])], ignore_index=True)
+df_monthly['is_forecast'] = df_monthly.index == len(df_monthly)-1
+
+# Mostra resultados
+df_monthly
+
+# %% [markdown]
+# ## 3. Visualizações Interativas
+
+# %%
+# Gráfico de Evolução Mensal
+fig1 = make_subplots(specs=[[{"secondary_y": True}]])
+
+# Barras de Vendas
+fig1.add_trace(
+    go.Bar(
+        x=df_monthly['mes'],
+        y=df_monthly['vendas'],
+        name="Vendas",
+        marker_color='#2A5CAA',
+        opacity=0.7
+    ),
+    secondary_y=False
+)
+
+# Linha de Receita
+fig1.add_trace(
+    go.Scatter(
+        x=df_monthly['mes'],
+        y=df_monthly['valor_venda'],
+        name="Receita (R$)",
+        line=dict(color='#FF7F0E', width=3),
+        mode='lines+markers'
+    ),
+    secondary_y=True
+)
+
+# Destaque para previsão
+if 'is_forecast' in df_monthly.columns:
+    forecast_data = df_monthly[df_monthly['is_forecast']]
+    fig1.add_trace(
+        go.Scatter(
+            x=forecast_data['mes'],
+            y=forecast_data['valor_venda'],
+            name="Previsão",
+            line=dict(color='#7F7F7F', width=3, dash='dot'),
+            mode='lines+markers'
+        ),
+        secondary_y=True
+    )
+
+# Formatação
+fig1.update_layout(
+    title="Desempenho Mensal - Vendas e Receita",
+    xaxis_title="Mês",
+    yaxis_title="Número de Vendas",
+    yaxis2_title="Receita (R$)",
+    hovermode="x unified",
+    template="plotly_white"
+)
+
+fig1.show()
+
+# %%
+# Mapa de Calor por Segmento e Região
+pivot_table = df.pivot_table(
+    index='regiao',
+    columns='segmento',
+    values='valor_venda',
+    aggfunc='sum',
+    fill_value=0
+)
+
+fig2 = px.imshow(
+    pivot_table,
+    labels=dict(x="Segmento", y="Região", color="Receita"),
+    title="Receita por Região e Segmento",
+    color_continuous_scale='Blues',
+    aspect="auto"
+)
+
+fig2.update_xaxes(side="top")
+fig2.show()
+
+# %%
+# Gráfico de Margem vs. Vendas
+fig3 = px.scatter(
+    df.sample(100),
+    x='valor_venda',
+    y='margem',
+    color='segmento',
+    size='valor_venda',
+    hover_data=['regiao'],
+    title="Relação entre Valor de Venda e Margem",
+    labels={'valor_venda': 'Valor da Venda (R$)', 'margem': 'Margem (%)'}
+)
+
+fig3.update_layout(
+    hovermode="closest",
+    showlegend=True
+)
+
+fig3.show()
+
+# %% [markdown]
+# ## 4. Painel de KPIs
+
+# %%
+# Cria um painel com os principais indicadores
+latest = df_monthly.iloc[-2]  # Pega o último mês real (não previsão)
+
+kpi_fig = go.Figure()
+
+# Adiciona métricas como anotações
+metrics = [
+    ("Vendas", latest['vendas'], "{:,}"),
+    ("Receita", latest['valor_venda'], "R$ {:,.2f}"),
+    ("Crescimento", latest['crescimento'], "{:.1f}%"),
+    ("Ticket Médio", latest['ticket_medio'], "R$ {:.2f}")
+]
+
+for i, (name, value, fmt) in enumerate(metrics):
+    color = '#2A5CAA'
+    if name == "Crescimento":
+        color = '#D62728' if value < 0 else '#2A5CAA'
+    
+    kpi_fig.add_annotation(
+        x=i,
+        y=0,
+        text=f"<b>{name}</b><br>{fmt.format(value)}",
+        showarrow=False,
+        font=dict(size=14, color=color),
+        xref="x",
+        yref="y"
+    )
+
+kpi_fig.update_layout(
+    title="Indicadores-Chave do Último Mês",
+    xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, range=[-0.5, 3.5]),
+    yaxis=dict(showgrid=False, zeroline=False, showticklabels=False, range=[-1, 1]),
+    plot_bgcolor="white",
+    height=200,
+    margin=dict(l=20, r=20, t=60, b=20)
+)
+
+kpi_fig.show()
+
+# %% [markdown]
+# ## 5. Storytelling com Dados
+
+# %%
+# Análise automática dos dados
+growth_trend = "positivo" if latest['crescimento'] > 0 else "negativo"
+best_region = pivot_table.sum(axis=1).idxmax()
+best_segment = pivot_table.sum(axis=0).idxmax()
+avg_margin = df['margem'].mean().round(1)
+
+print(f"""
+## Principais Insights:
+
+1. **Tendência de Crescimento**: O último mês apresentou um crescimento {growth_trend} de {latest['crescimento']}% na receita.
+
+2. **Desempenho por Região**: A região {best_region} foi a que mais contribuiu para a receita total.
+
+3. **Segmento Destaque**: O segmento {best_segment} apresentou o melhor desempenho em vendas.
+
+4. **Margem Média**: A margem média das vendas foi de {avg_margin}%, indicando {'saudável' if avg_margin > 30 else 'moderada'} lucratividade.
+
+5. **Próximos Passos**: {'Manter estratégias atuais' if growth_trend == 'positivo' else 'Revisar estratégias comerciais'} para o próximo período.
+""")
